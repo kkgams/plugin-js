@@ -46,4 +46,4 @@ target_link_libraries(rust-crates PRIVATE rust_staticlib rust-hooks-wrappers)
 
 # Add crates as needed here:
 add_rust_lib(rust-url "${CMAKE_CURRENT_SOURCE_DIR}/crates/rust-url")
-add_rust_lib(multipart "${CMAKE_CURRENT_SOURCE_DIR}/crates/rust-multipart" "\"capi\", \"simd\"")
+# multipart is only needed for the removed form-data/fetch builtins.

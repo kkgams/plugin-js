@@ -16,7 +16,7 @@ if (DEFINED ENV{HOST_API})
             folder of StarlingMonkey, or be an absolute path pointing to custom host API implementation.")
     endif()
 else()
-    set(HOST_API ${CMAKE_CURRENT_SOURCE_DIR}/host-apis/wasi-0.2.10)
+    set(HOST_API ${CMAKE_CURRENT_SOURCE_DIR}/host-apis/my-minimal)
 endif()
 message(STATUS "Using host API: ${HOST_API}")
 
@@ -27,7 +27,7 @@ endif()
 include("CPM")
 include("toolchain")
 
-project(StarlingMonkey)
+project(starling-lite)
 
 include("init-corrosion")
 
@@ -38,12 +38,11 @@ include("wasmtime")
 include("cbindgen")
 
 include("spidermonkey")
-include("openssl")
 include("${HOST_API}/host_api.cmake")
 include("build-crates")
 include("lint")
 
-option(ENABLE_JS_DEBUGGER "Enable support for debugging content via a socket connection" ON)
+option(ENABLE_JS_DEBUGGER "Enable support for debugging content via a socket connection" OFF)
 
 add_library(extension_api INTERFACE include/extension-api.h runtime/encode.h runtime/decode.h)
 if (ENABLE_JS_DEBUGGER)
@@ -53,8 +52,6 @@ target_link_libraries(extension_api INTERFACE rust-url spidermonkey)
 target_include_directories(extension_api INTERFACE include deps/include runtime)
 
 include("builtins")
-
-include("tests/wpt-harness/wpt.cmake")
 
 set(SOURCES
     runtime/js.cpp
@@ -122,11 +119,7 @@ else()
 endif()
 
 set(RUNTIME_FILE "starling-raw.wasm")
-set(ADAPTER_FILE "preview1-adapter.wasm")
 configure_file("componentize.sh.in" "${CMAKE_CURRENT_BINARY_DIR}/componentize.sh" @ONLY)
-if(EXISTS ${ADAPTER})
-    configure_file(${ADAPTER} "${CMAKE_CURRENT_BINARY_DIR}/${ADAPTER_FILE}" COPYONLY)
-endif()
 
 function(componentize OUTPUT)
     set(options)
@@ -147,7 +140,7 @@ function(componentize OUTPUT)
     add_custom_target(${OUTPUT} DEPENDS ${OUTPUT}.wasm)
 endfunction()
 
-componentize(smoke-test SOURCES tests/cases/smoke/smoke.js)
-componentize(starling)
+# starling-lite is a reusable runtime component with explicit init/eval exports.
+componentize(starling-lite)
 
-include("tests/tests.cmake")
+# Tests for the full StarlingMonkey web runtime are intentionally not enabled for starling-lite.

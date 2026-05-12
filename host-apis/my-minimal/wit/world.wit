@@ -1,0 +1,16 @@
+package my:starling-lite;
+
+interface host {
+  log: func(msg: string);
+  random-u32: func() -> u32;
+}
+
+interface runtime {
+  init: func() -> result<_, string>;
+  eval: func(source: string) -> result<string, string>;
+}
+
+world starling-lite {
+  import host;
+  export runtime;
+}

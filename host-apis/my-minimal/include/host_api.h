@@ -13,6 +13,12 @@
 #include "js/Utility.h"
 #include "rust-url.h"
 
+using std::optional;
+using std::string_view;
+using std::tuple;
+using std::unique_ptr;
+using std::vector;
+
 namespace host_api {
 
 using APIError = uint8_t;

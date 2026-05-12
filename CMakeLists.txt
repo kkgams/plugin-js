@@ -55,6 +55,7 @@ include("builtins")
 
 set(SOURCES
     runtime/js.cpp
+    host-apis/my-minimal/wasi_shim.cpp
     runtime/allocator.cpp
     runtime/encode.cpp
     runtime/decode.cpp
@@ -68,6 +69,7 @@ set(SOURCES
 add_executable(starling-raw.wasm ${SOURCES})
 
 target_link_libraries(starling-raw.wasm PRIVATE host_api extension_api builtins spidermonkey rust-crates)
+target_link_options(starling-raw.wasm PRIVATE -Wl,--allow-multiple-definition)
 
 option(USE_WASM_OPT "use wasm-opt to optimize the StarlingMonkey binary" ON)
 
@@ -119,6 +121,17 @@ else()
 endif()
 
 set(RUNTIME_FILE "starling-raw.wasm")
+set(ADAPTER_FILE "starling-lite-preview1-fd-write-adapter.wasm")
+set(ADAPTER_WAT "${CMAKE_CURRENT_BINARY_DIR}/starling-lite-preview1-fd-write-adapter.wat")
+set(ADAPTER "${CMAKE_CURRENT_BINARY_DIR}/${ADAPTER_FILE}")
+file(WRITE ${ADAPTER_WAT} "(module\n  ;; Satisfy wasi-libc's residual fd_write import without exposing WASI to the host.\n  ;; Runtime logging uses the explicit my:starling-lite/host.log import instead.\n  (func (export \"fd_write\") (param i32 i32 i32 i32) (result i32)\n    i32.const 0)\n)\n")
+execute_process(
+    COMMAND ${WASM_TOOLS_BIN} parse ${ADAPTER_WAT} -o ${ADAPTER}
+    RESULT_VARIABLE ADAPTER_BUILD_RESULT
+)
+if(NOT ADAPTER_BUILD_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to build minimal preview1 fd_write adapter")
+endif()
 configure_file("componentize.sh.in" "${CMAKE_CURRENT_BINARY_DIR}/componentize.sh" @ONLY)
 
 function(componentize OUTPUT)

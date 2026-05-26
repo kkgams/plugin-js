@@ -1,0 +1,74 @@
+name: Publish Wasm OCI Artifact
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
+
+      - name: Enable Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Build gams-js.wasm
+        run: |
+          nix develop --command make build
+
+      - name: Verify build artifact
+        run: |
+          test -f cmake-build-release/gams-js.wasm
+          ls -lh cmake-build-release/gams-js.wasm
+
+      - name: Compute OCI metadata
+        id: meta
+        run: |
+          OWNER="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE="ghcr.io/${OWNER}/gams-js"
+          VERSION="$(date -u +'%Y%m%d.%H%M')"
+          REF="${IMAGE}:${VERSION}"
+
+          echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
+
+      - name: Install wkg
+        run: |
+          nix develop --command cargo install wkg
+
+      - name: Login to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | docker login ghcr.io \
+                -u "${{ github.actor }}" \
+                --password-stdin
+
+      - name: Push Wasm component to GHCR
+        run: |
+          nix develop --command \
+            wkg oci push "${{ steps.meta.outputs.ref }}" cmake-build-release/gams-js.wasm
+
+      - name: Deployment summary
+        run: |
+          {
+            echo "## Published Wasm OCI artifact"
+            echo ""
+            echo "\`${{ steps.meta.outputs.ref }}\`"
+            echo ""
+            echo "- Image: \`${{ steps.meta.outputs.image }}\`"
+            echo "- Version: \`${{ steps.meta.outputs.version }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

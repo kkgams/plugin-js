@@ -37,18 +37,20 @@ jobs:
         id: meta
         run: |
           OWNER="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
-          IMAGE="ghcr.io/${OWNER}/gams-js"
+          IMAGE="ghcr.io/${OWNER}/gams/js"
           VERSION="$(date -u +'%Y%m%d.%H%M')"
-          REF="${IMAGE}:${VERSION}"
+          TIMESTAMP_REF="${IMAGE}:${VERSION}"
+          STABLE_REF="${IMAGE}:1.0.0"
+          LATEST_REF="${IMAGE}:latest"
           PACKAGE="gams:js@1.0.0"
-          CANONICAL_REF="ghcr.io/${OWNER}/gams/js:1.0.0"
 
           echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
+          echo "timestamp_ref=${TIMESTAMP_REF}" >> "$GITHUB_OUTPUT"
+          echo "stable_ref=${STABLE_REF}" >> "$GITHUB_OUTPUT"
+          echo "latest_ref=${LATEST_REF}" >> "$GITHUB_OUTPUT"
           echo "package=${PACKAGE}" >> "$GITHUB_OUTPUT"
-          echo "canonical_ref=${CANONICAL_REF}" >> "$GITHUB_OUTPUT"
 
       - name: Install wkg
         run: |
@@ -61,45 +63,29 @@ jobs:
                 -u "${{ github.actor }}" \
                 --password-stdin
 
-      - name: Push timestamped Wasm component to GHCR
+      - name: Push timestamped tag to GHCR
         run: |
           nix develop --command \
-            wkg oci push "${{ steps.meta.outputs.ref }}" cmake-build-release/gams-js.wasm
+            wkg oci push "${{ steps.meta.outputs.timestamp_ref }}" cmake-build-release/gams-js.wasm
+
+      - name: Push 1.0.0 tag to GHCR
+        run: |
+          nix develop --command \
+            wkg oci push "${{ steps.meta.outputs.stable_ref }}" cmake-build-release/gams-js.wasm
 
       - name: Push latest tag to GHCR
-        if: github.ref == 'refs/heads/main'
         run: |
           nix develop --command \
-            wkg oci push "${{ steps.meta.outputs.image }}:latest" cmake-build-release/gams-js.wasm
-
-      - name: Publish canonical wkg package layout to GHCR
-        run: |
-          set -euo pipefail
-
-          WKG_CONFIG="${WKG_CONFIG:-$HOME/.config/wasm-pkg/config.toml}"
-          if [ -s "$WKG_CONFIG" ]; then
-            if nix develop --command \
-              wkg publish cmake-build-release/gams-js.wasm \
-                --package "${{ steps.meta.outputs.package }}"; then
-              exit 0
-            fi
-
-            echo "::warning::wkg publish failed; falling back to direct OCI push"
-          fi
-
-          nix develop --command \
-            wkg oci push "${{ steps.meta.outputs.canonical_ref }}" cmake-build-release/gams-js.wasm
+            wkg oci push "${{ steps.meta.outputs.latest_ref }}" cmake-build-release/gams-js.wasm
 
       - name: Deployment summary
         run: |
           {
             echo "## Published Wasm OCI artifact"
             echo ""
-            echo "- Timestamped: \`${{ steps.meta.outputs.ref }}\`"
-            echo "- Canonical wkg package: \`${{ steps.meta.outputs.canonical_ref }}\`"
-            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-              echo "- Latest: \`${{ steps.meta.outputs.image }}:latest\`"
-            fi
+            echo "- Timestamped: \`${{ steps.meta.outputs.timestamp_ref }}\`"
+            echo "- Stable: \`${{ steps.meta.outputs.stable_ref }}\`"
+            echo "- Latest: \`${{ steps.meta.outputs.latest_ref }}\`"
             echo ""
             echo "- Package: \`${{ steps.meta.outputs.package }}\`"
             echo "- Image: \`${{ steps.meta.outputs.image }}\`"

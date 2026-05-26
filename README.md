@@ -44,8 +44,9 @@ wkg get gams:js@1.0.0 --output build.nosync/plugins/js.comp.wasm
 
 This resolves to the canonical OCI package path `ghcr.io/kkgams/gams/js:1.0.0`.
 
-The release workflow also keeps publishing timestamped OCI images for direct pulls, for example:
+The release workflow publishes only the canonical OCI package path, tagged as `1.0.0`, `latest`, and a UTC timestamp, for example:
 
 ```sh
-wkg oci pull ghcr.io/kkgams/gams-js:<timestamp> -o build.nosync/plugins/js.comp.wasm
+wkg oci pull ghcr.io/kkgams/gams/js:<timestamp> -o build.nosync/plugins/js.comp.wasm
+wkg oci pull ghcr.io/kkgams/gams/js:latest -o build.nosync/plugins/js.comp.wasm
 ```

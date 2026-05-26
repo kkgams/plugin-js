@@ -1,2 +1,0 @@
-Exception while evaluating top-level script
-e2e/syntax-err/syntax-err.js:2:1 SyntaxError: expected expression, got end of script

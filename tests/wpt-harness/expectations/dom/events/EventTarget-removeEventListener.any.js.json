@@ -1,5 +1,0 @@
-{
-  "removing a null event listener should succeed": {
-    "status": "PASS"
-  }
-}

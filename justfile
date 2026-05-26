@@ -1,96 +1,12 @@
 ncpus := num_cpus()
-justdir := justfile_directory()
-mode := 'debug'
-builddir := justdir / 'cmake-build-' + mode
-reconfigure := 'false'
+mode := 'release'
+builddir := justfile_directory() / 'cmake-build-' + mode
 
-alias b := build
-alias t := test
-alias w := wpt-test
-alias c := componentize
-alias fmt := format
+# Build the single GAMS JS plugin component.
+build *flags:
+    cmake -S . -B {{ builddir }} -DCMAKE_BUILD_TYPE={{ capitalize(mode) }} {{ flags }}
+    cmake --build {{ builddir }} --parallel {{ ncpus }} --target gams-js
 
-# List all recipes
-default:
-    @echo 'Default mode {{ mode }}'
-    @echo 'Default build directory {{ builddir }}'
-    @just --list
-
-# Build specified target or all otherwise
-build target="all" *flags:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo 'Setting build directory to {{ builddir }}, build type {{ if mode == "weval" { "Release (weval)" } else { capitalize(mode) } }}'
-
-    # Only run configure step if build directory doesn't exist yet
-    if ! {{ path_exists(builddir) }} || {{ reconfigure }} = 'true'; then
-        cmake -S . -B {{ builddir }} {{ flags }} \
-            -DCMAKE_BUILD_TYPE={{ if mode == "weval" { "Release" } else { capitalize(mode) } }} \
-            {{ if mode == "weval" { "-DUSE_WASM_OPT=OFF -DWEVAL=ON" } else { "" } }}
-    else
-        echo 'build directory already exists, skipping cmake configure'
-    fi
-
-    # Build target
-    cmake --build {{ builddir }} --parallel {{ ncpus }} {{ if target == "" { "" } else { "--target " + target } }}
-
-# Run clean target
+# Remove generated build output.
 clean:
-    cmake --build {{ builddir }} --target clean
-
-[private]
-[confirm('proceed?')]
-do_clean:
     rm -rf {{ builddir }}
-
-# Remove build directory
-clean-all: && do_clean
-    @echo "This will remove {{builddir}}"
-
-# Run clang-tidy
-lint: (build "clang-tidy")
-
-# Run clang-tidy and apply offered fixes
-lint-fix: (build "clang-tidy-fix")
-
-# Componentize js script
-componentize script="" outfile="starling.wasm": build
-    {{ builddir }}/componentize.sh {{ script }} -o {{ outfile }}
-
-# Componentize and serve script with wasmtime
-serve script: (componentize script)
-    wasmtime serve -S common starling.wasm
-
-# Format code using clang-format. Use --fix to fix files inplace
-format *ARGS:
-    {{ justdir }}/scripts/clang-format.sh {{ ARGS }}
-
-# Run integration test
-test regex="": (build "integration-test-server") (build "wpt-runtime")
-    ctest --test-dir {{ builddir }} -j {{ ncpus }} --output-on-failure {{ if regex == "" { regex } else { "-R " + regex } }}
-
-# Run web platform test suite
-[group('wpt')]
-wpt-test filter="": (build "wpt-runtime")
-    WPT_FILTER={{ filter }} ctest --test-dir {{ builddir }} -R wpt --verbose
-
-# Update web platform test expectations
-[group('wpt')]
-wpt-update filter="": (build "wpt-runtime")
-    WPT_FLAGS="--update-expectations" WPT_FILTER={{ filter }} ctest --test-dir {{ builddir }} -R wpt --verbose
-
-# Run wpt server
-[group('wpt')]
-wpt-server: (build "wpt-runtime")
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd {{ builddir }}
-    wpt_root=$(grep '^CPM_PACKAGE_wpt-suite_SOURCE_DIR:INTERNAL=' CMakeCache.txt | cut -d'=' -f2-)
-
-    echo "Using wpt-suite at ${wpt_root}"
-    WASMTIME_BACKTRACE_DETAILS= node {{ justdir }}/tests/wpt-harness/run-wpt.mjs --wpt-root=${wpt_root} -vv --interactive
-
-# Prepare WPT hosts
-[group('wpt')]
-wpt-setup:
-    cat deps/wpt-hosts | sudo tee -a /etc/hosts

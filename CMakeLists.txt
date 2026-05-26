@@ -1,53 +1,33 @@
 cmake_minimum_required(VERSION 3.27)
+
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
-if (DEFINED ENV{HOST_API})
-    set(HOST_API $ENV{HOST_API})
-    if (EXISTS ${HOST_API})
-        cmake_path(ABSOLUTE_PATH HOST_API)
-    else ()
-        set(HOST_API ${CMAKE_CURRENT_SOURCE_DIR}/host-apis/$ENV{HOST_API})
-    endif()
-    if (NOT EXISTS ${HOST_API})
-        message(FATAL_ERROR "Host API `$ENV{HOST_API}` not found. The HOST_API environment \
-            variable must be the name of a host API implementation provided in the `host-apis` \
-            folder of StarlingMonkey, or be an absolute path pointing to custom host API implementation.")
-    endif()
-else()
-    set(HOST_API ${CMAKE_CURRENT_SOURCE_DIR}/host-apis/my-minimal)
-endif()
+# This repository builds one artifact: the GAMS JavaScript plugin component.
+set(HOST_API ${CMAKE_CURRENT_SOURCE_DIR}/host-apis/my-minimal)
 message(STATUS "Using host API: ${HOST_API}")
 
-# Ensure that the CPM cache is created outside the build dir, even if no location is specified by the developer.
+# Keep CPM downloads outside individual build directories.
 if(NOT DEFINED ENV{CPM_SOURCE_CACHE})
     set(ENV{CPM_SOURCE_CACHE} ${CMAKE_CURRENT_SOURCE_DIR}/deps/cpm_cache)
 endif()
+
 include("CPM")
 include("toolchain")
 
-project(starling-lite)
+project(gams-js-plugin)
 
 include("init-corrosion")
-
 include("wasm-tools")
 include("binaryen")
 include("weval")
 include("wasmtime")
-include("cbindgen")
-
 include("spidermonkey")
 include("${HOST_API}/host_api.cmake")
 include("build-crates")
-include("lint")
-
-option(ENABLE_JS_DEBUGGER "Enable support for debugging content via a socket connection" OFF)
 
 add_library(extension_api INTERFACE include/extension-api.h runtime/encode.h runtime/decode.h)
-if (ENABLE_JS_DEBUGGER)
-    target_compile_definitions(extension_api INTERFACE ENABLE_JS_DEBUGGER)
-endif()
 target_link_libraries(extension_api INTERFACE rust-url spidermonkey)
 target_include_directories(extension_api INTERFACE include deps/include runtime)
 
@@ -67,27 +47,25 @@ set(SOURCES
 )
 
 add_executable(starling-raw.wasm ${SOURCES})
-
 target_link_libraries(starling-raw.wasm PRIVATE host_api extension_api builtins spidermonkey rust-crates)
 target_link_options(starling-raw.wasm PRIVATE -Wl,--allow-multiple-definition)
 
-option(USE_WASM_OPT "use wasm-opt to optimize the StarlingMonkey binary" ON)
+option(USE_WASM_OPT "use wasm-opt to optimize the raw wasm binary" ON)
 
-# For release builds, use wasm-opt to optimize the generated wasm file.
 if (USE_WASM_OPT)
     if (CMAKE_BUILD_TYPE STREQUAL "Release")
         add_custom_command(
-                TARGET starling-raw.wasm
-                POST_BUILD
-                COMMAND ${WASM_OPT} --strip-debug -O3 -o starling-raw.wasm starling-raw.wasm
-                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            TARGET starling-raw.wasm
+            POST_BUILD
+            COMMAND ${WASM_OPT} --strip-debug -O3 -o starling-raw.wasm starling-raw.wasm
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         )
     elseif (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
         add_custom_command(
-                TARGET starling-raw.wasm
-                POST_BUILD
-                COMMAND ${WASM_OPT} -O3 -g -o starling-raw.wasm starling-raw.wasm
-                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            TARGET starling-raw.wasm
+            POST_BUILD
+            COMMAND ${WASM_OPT} -O3 -g -o starling-raw.wasm starling-raw.wasm
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         )
     endif()
 else()
@@ -101,9 +79,8 @@ else()
     endif()
 endif()
 
-# build a compilation cache of ICs
+# Optional AOT compilation cache for `cmake -DWEVAL=ON` builds.
 if(WEVAL)
-    include("weval")
     file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/null.js "function main() {}")
     add_custom_target(
         starling-ics.wevalcache
@@ -114,17 +91,15 @@ if(WEVAL)
         DEPENDS starling-raw.wasm
         VERBATIM
     )
-    set(WEVAL_CACHE_FILE "starling-ics.wevalcache")
     set(AOT 1)
 else()
     set(AOT 0)
 endif()
 
-set(RUNTIME_FILE "starling-raw.wasm")
-set(ADAPTER_FILE "starling-lite-preview1-fd-write-adapter.wasm")
-set(ADAPTER_WAT "${CMAKE_CURRENT_BINARY_DIR}/starling-lite-preview1-fd-write-adapter.wat")
+set(ADAPTER_FILE "gams-js-preview1-fd-write-adapter.wasm")
+set(ADAPTER_WAT "${CMAKE_CURRENT_BINARY_DIR}/gams-js-preview1-fd-write-adapter.wat")
 set(ADAPTER "${CMAKE_CURRENT_BINARY_DIR}/${ADAPTER_FILE}")
-file(WRITE ${ADAPTER_WAT} "(module\n  ;; Satisfy wasi-libc's residual fd_write import without exposing preview1 fd_write to the host.\n  ;; Runtime logging is intentionally local/no-op for the GAMS plugin shape.\n  (func (export \"fd_write\") (param i32 i32 i32 i32) (result i32)\n    i32.const 0)\n)\n")
+file(WRITE ${ADAPTER_WAT} "(module\n  ;; Satisfy wasi-libc's residual fd_write import without exposing preview1 fd_write to the host.\n  (func (export \"fd_write\") (param i32 i32 i32 i32) (result i32)\n    i32.const 0)\n)\n")
 execute_process(
     COMMAND ${WASM_TOOLS_BIN} parse ${ADAPTER_WAT} -o ${ADAPTER}
     RESULT_VARIABLE ADAPTER_BUILD_RESULT
@@ -132,31 +107,14 @@ execute_process(
 if(NOT ADAPTER_BUILD_RESULT EQUAL 0)
     message(FATAL_ERROR "Failed to build minimal preview1 fd_write adapter")
 endif()
+
 configure_file("componentize.sh.in" "${CMAKE_CURRENT_BINARY_DIR}/componentize.sh" @ONLY)
 
-function(componentize OUTPUT)
-    set(options)
-    set(oneValueArgs)
-    set(multiValueArgs SOURCES)
-    cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-    list(TRANSFORM ARG_SOURCES PREPEND ${CMAKE_CURRENT_SOURCE_DIR}/)
-    list(JOIN ARG_SOURCES " " SOURCES)
-    get_target_property(RUNTIME_DIR starling-raw.wasm BINARY_DIR)
-
-    add_custom_command(
-            OUTPUT ${OUTPUT}.wasm
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-            COMMAND ${RUNTIME_DIR}/componentize.sh ${SOURCES} -o ${OUTPUT}.wasm
-            DEPENDS ${ARG_SOURCES} ${RUNTIME_DIR}/componentize.sh starling-raw.wasm
-            VERBATIM
-    )
-    add_custom_target(${OUTPUT} DEPENDS ${OUTPUT}.wasm)
-endfunction()
-
-# gams-js is a GAMS plugin-shaped singleton JS runner exporting gams:js/js.run.
-componentize(gams-js)
-
-# Keep the historical target name as an alias artifact during the migration.
-componentize(starling-lite)
-
-# Tests for the full StarlingMonkey web runtime are intentionally not enabled for starling-lite.
+add_custom_command(
+    OUTPUT gams-js.wasm
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/componentize.sh -o gams-js.wasm
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/componentize.sh starling-raw.wasm
+    VERBATIM
+)
+add_custom_target(gams-js ALL DEPENDS gams-js.wasm)

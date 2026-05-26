@@ -1,2 +1,0 @@
-Componentizing e2e/init-location/init-location.js into e2e/init-location/init-location.wasm
-Log: http://foo.bar/

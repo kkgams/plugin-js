@@ -1,3 +1,0 @@
-# Debugging StarlingMonkey application
-
-TODO

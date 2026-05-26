@@ -1,5 +1,0 @@
-{
-  "Invalid form data should not crash the browser": {
-    "status": "PASS"
-  }
-}

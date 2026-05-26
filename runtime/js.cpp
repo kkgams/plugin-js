@@ -4,7 +4,7 @@
 
 #include "encode.h"
 #include "extension-api.h"
-#include "starling_lite.h"
+#include "js_plugin.h"
 
 #include "js/CompilationAndEvaluation.h"
 #include "js/SourceText.h"
@@ -18,8 +18,8 @@ __attribute__((weak)) int main(int argc, const char *argv[]) {
   MOZ_ASSERT_UNREACHABLE("main() should not be called");
 }
 
-static void set_string(starling_lite_string_t *out, std::string_view value) {
-  starling_lite_string_dup_n(out, value.data(), value.size());
+static void set_string(js_plugin_string_t *out, std::string_view value) {
+  js_plugin_string_dup_n(out, value.data(), value.size());
 }
 
 static std::string pending_exception_to_string(JSContext *cx) {
@@ -49,10 +49,9 @@ static std::string pending_exception_to_string(JSContext *cx) {
   return std::string(encoded.begin(), encoded.end());
 }
 
-extern "C" bool exports_my_starling_lite_runtime_init(starling_lite_string_t *err) {
-  (void)err;
+static void ensure_engine() {
   if (ENGINE) {
-    return true;
+    return;
   }
 
   auto config = std::make_unique<api::EngineConfig>();
@@ -61,16 +60,14 @@ extern "C" bool exports_my_starling_lite_runtime_init(starling_lite_string_t *er
 
   ENGINE = new api::Engine(std::move(config));
   engine = ENGINE;
-  return true;
 }
 
-extern "C" bool exports_my_starling_lite_runtime_eval(starling_lite_string_t *source,
-                                                      starling_lite_string_t *ret,
-                                                      starling_lite_string_t *err) {
-  if (!ENGINE) {
-    set_string(err, "runtime not initialized; call init() first");
-    return false;
-  }
+extern "C" bool exports_gams_js_js_run(js_plugin_string_t *source,
+                                       js_plugin_string_t *ret,
+                                       js_plugin_string_t *err) {
+  // Option B: singleton JS runtime. The first run lazily creates SpiderMonkey;
+  // later runs reuse the same global object and event loop.
+  ensure_engine();
 
   JSContext *cx = ENGINE->cx();
   JSAutoRealm ar(cx, ENGINE->global());

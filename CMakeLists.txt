@@ -124,7 +124,7 @@ set(RUNTIME_FILE "starling-raw.wasm")
 set(ADAPTER_FILE "starling-lite-preview1-fd-write-adapter.wasm")
 set(ADAPTER_WAT "${CMAKE_CURRENT_BINARY_DIR}/starling-lite-preview1-fd-write-adapter.wat")
 set(ADAPTER "${CMAKE_CURRENT_BINARY_DIR}/${ADAPTER_FILE}")
-file(WRITE ${ADAPTER_WAT} "(module\n  ;; Satisfy wasi-libc's residual fd_write import without exposing WASI to the host.\n  ;; Runtime logging uses the explicit my:starling-lite/host.log import instead.\n  (func (export \"fd_write\") (param i32 i32 i32 i32) (result i32)\n    i32.const 0)\n)\n")
+file(WRITE ${ADAPTER_WAT} "(module\n  ;; Satisfy wasi-libc's residual fd_write import without exposing preview1 fd_write to the host.\n  ;; Runtime logging is intentionally local/no-op for the GAMS plugin shape.\n  (func (export \"fd_write\") (param i32 i32 i32 i32) (result i32)\n    i32.const 0)\n)\n")
 execute_process(
     COMMAND ${WASM_TOOLS_BIN} parse ${ADAPTER_WAT} -o ${ADAPTER}
     RESULT_VARIABLE ADAPTER_BUILD_RESULT
@@ -153,7 +153,10 @@ function(componentize OUTPUT)
     add_custom_target(${OUTPUT} DEPENDS ${OUTPUT}.wasm)
 endfunction()
 
-# starling-lite is a reusable runtime component with explicit init/eval exports.
+# gams-js is a GAMS plugin-shaped singleton JS runner exporting gams:js/js.run.
+componentize(gams-js)
+
+# Keep the historical target name as an alias artifact during the migration.
 componentize(starling-lite)
 
 # Tests for the full StarlingMonkey web runtime are intentionally not enabled for starling-lite.

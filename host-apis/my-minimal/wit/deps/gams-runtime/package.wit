@@ -1,0 +1,10 @@
+package gams:runtime@1.0.0;
+
+interface runtime {
+  /// Dynamic call from a WASM component to the host runtime.
+  call: func(target: string, args: string) -> result<string, string>;
+}
+
+world imports {
+  import runtime;
+}

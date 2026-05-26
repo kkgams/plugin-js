@@ -6,6 +6,10 @@
 # Editor-based HTTP Client requests
 /httpRequests/
 
+# Local dev environment/cache files
+/.dev-tools/
+/.direnv/
+
 # CMake/CTest generated files
 /cmake-build-*/
 /deps/cpm_cache/

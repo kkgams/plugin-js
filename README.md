@@ -17,8 +17,8 @@ cmake -S . -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build cmake-build-release --parallel $(sysctl -n hw.ncpu) --target gams-js
 ```
 
-If `just` is installed:
+Or use the Makefile wrapper:
 
 ```sh
-just build
+make build
 ```

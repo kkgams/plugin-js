@@ -26,7 +26,6 @@
               # Project build entry points.
               cmake
               ninja
-              just
               gnumake
 
               # Native tools used by CMake/CPM and fallback source builds.
@@ -68,7 +67,7 @@
               export PATH="$CARGO_HOME/bin:$PATH"
 
               echo "gams-js dev shell"
-              echo "  build:    just build"
+              echo "  build:    make build"
               echo "  manual:   cmake -S . -B cmake-build-release -DCMAKE_BUILD_TYPE=Release && cmake --build cmake-build-release --target gams-js --parallel"
               echo "  artifact: cmake-build-release/gams-js.wasm"
             '';

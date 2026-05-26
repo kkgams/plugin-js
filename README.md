@@ -22,3 +22,30 @@ Or use the Makefile wrapper:
 ```sh
 make build
 ```
+
+## Install from GHCR with `wkg`
+
+Configure `wkg` to resolve the `gams` namespace from GHCR:
+
+```toml
+# ~/.config/wasm-pkg/config.toml
+
+default_registry = "ghcr.io"
+
+[namespace_registries]
+gams = { registry = "gams-ghcr", metadata = { preferredProtocol = "oci", oci = { registry = "ghcr.io", namespacePrefix = "kkgams/" } } }
+```
+
+Then install the published component with the WIT package name:
+
+```sh
+wkg get gams:js@1.0.0 --output build.nosync/plugins/js.comp.wasm
+```
+
+This resolves to the canonical OCI package path `ghcr.io/kkgams/gams/js:1.0.0`.
+
+The release workflow also keeps publishing timestamped OCI images for direct pulls, for example:
+
+```sh
+wkg oci pull ghcr.io/kkgams/gams-js:<timestamp> -o build.nosync/plugins/js.comp.wasm
+```
